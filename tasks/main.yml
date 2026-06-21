@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: MIT-0
+---
+# tasks file for roles/taskfile
+
+- name: Ensure curl is installed
+  ansible.builtin.package:
+    name: curl
+    state: present
+  become: true
+
+- name: Check installed task version
+  ansible.builtin.command:
+    cmd: "{{ taskfile_install_dir }}/task --version"
+  register: _taskfile_installed_version
+  changed_when: false
+  failed_when: false
+  when: taskfile_version != ""
+
+- name: Install task via official install script
+  ansible.builtin.shell:
+    cmd: >
+      sh -c "$(curl --location https://taskfile.dev/install.sh)" --
+      -d
+      -b {{ taskfile_install_dir }}
+      {{ taskfile_version }}
+    creates: "{{ taskfile_install_dir }}/task"
+  become: true
+  when: >
+    taskfile_force or
+    taskfile_version == "" or
+    (_taskfile_installed_version.rc | default(1)) != 0 or
+    taskfile_version not in (_taskfile_installed_version.stdout | default(''))
+
+- name: Verify task binary is present
+  ansible.builtin.stat:
+    path: "{{ taskfile_install_dir }}/task"
+  register: _taskfile_binary
+
+- name: Fail if task binary is missing
+  ansible.builtin.fail:
+    msg: "task binary not found at {{ taskfile_install_dir }}/task"
+  when: not _taskfile_binary.stat.exists
